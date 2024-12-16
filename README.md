@@ -3,15 +3,16 @@
 This project analyses COVID-19 case rates, hospitalisation rates, and death rates across the United States during five key pandemic waves (2020–2023). It also explores state-level variations and the impact of vaccination coverage on COVID-19 outcomes.
 
 # Repository Structure 
-├── code/                  # Contains all R scripts for data wrangling and analysis  
-│   ├── final-project.qmd  # Quarto file for rendering the final report  
-│   ├── data-wrangling.R   # Script for cleaning and preparing datasets  
-│   └── analysis.R         # Code for statistical analysis and visualisations  
+├── code/                  # Contains all R scripts for data wrangling and analysis 
+|   |-- BST260-ref.bib     # Bibliography file 
+│   └── final-project.qmd  # Quarto file for data wrangling  
 ├── data/                  # Processed and raw data  
-│   ├── clean/             # Cleaned datasets ready for analysis  
-│   └── raw/               # Original datasets (raw files)  
+│   └── raw/               # Original datasets (raw file)
+|         └── NST-EST2023-ALLDATA.csv # Raw data
 ├── docs/                  # Final outputs (HTML, PDF)  
-├── raw-data/              # Supplementary or backup raw data  
+|   |-- final-project-quarto.pdf   # Quarto file PDF version
+|   |-- Supplementary.pdf  # Supplementary methods PDF version
+|   └── BST260_final_report.pdf # Final report PDF version
 └── README.md              # Project instructions and details  
 
 # Data Sources
@@ -47,10 +48,10 @@ git clone https://github.com/your-repo-name.git
 cd your-repo-name  
 	2.	Prepare the Data:
 Run the script to clean and process the population and COVID-19 datasets:
-source("code/data-wrangling.R")  
+source("code/final-project.R")  
 	3.	Run the Analysis:
 Perform statistical analyses and create visualisations:
-source("code/analysis.R")  
+source("code/final-project.R")  
 	4.	Generate the Report:
 Render the final report using Quarto:
 quarto render code/final-project.qmd  
@@ -66,10 +67,10 @@ The final report (HTML or PDF) will be generated in the docs/ directory.
 # Supplementary Information
 
 Additional visualisations and results are included in the supplementary section of the report:
-	•	Figure S1: COVID-19 Cases, Deaths, and Hospitalisations Over Time.
-	•	Figure S2: Hospitalisation-to-Death Ratio (HDR) Over Time by Wave.
-	•	Figure S3: State-Level Comparison of HDR by Wave.
-	•	Figure S4: Rolling Averages of Cases, Deaths, and Hospitalisations.
+	•	Figure 1: COVID-19 Cases, Deaths, and Hospitalisations Over Time.
+	•	Figure 2: Hospitalisation-to-Death Ratio (HDR) Over Time by Wave.
+	•	Figure 3: State-Level Comparison of HDR by Wave.
+	•	Figure 4: Rolling Averages of Cases, Deaths, and Hospitalisations.
 
 These figures further support the main findings and provide deeper insight into trends observed during the analysis.
 	
