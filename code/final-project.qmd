@@ -1,0 +1,562 @@
+---
+title: "final-project"
+format: html
+editor: visual
+---
+
+```{r}
+
+library(tidyverse)
+library(janitor)
+library(stringr)
+library(dplyr)
+library(httr2)
+
+census_key <- "2abeb09fab2a060893dafc5545972f25d26b0fb3"
+url <- "https://api.census.gov/data/2021/pep/population"
+
+request <- request(url) |>
+  req_url_query(
+    get = I("POP_2020,POP_2021,NAME"),
+    `for` = I("state:*"),
+    key = census_key
+  )
+```
+
+```{r}
+response <- request |> req_perform()
+pop_2021 <- response |>
+  resp_body_json(simplifyVector = TRUE) |>
+  as_tibble()
+pop_2021
+
+str(pop_2021)
+class(pop_2021)
+
+```
+
+```{r}
+
+pop_2021_new <- pop_2021 |> row_to_names(row_number = 1)|>
+  select(-state)|>
+  # rename state column to state_name
+  rename(state_name = NAME) |>
+  # use pivot_longer to tidy
+  pivot_longer(-state_name,
+               names_to = "year",
+               values_to = "population")|>
+  # remove POP_ from year
+  mutate(
+    year = str_remove(year, "POP_"),
+      # parese all relevant colunns to numeric
+    year = as.numeric(year),
+    population = as.numeric(population),
+      # add state abbreviations using state.abb variable
+      # use case_when to add abbreviations for DC and PR
+    state = case_when(
+      state_name == "District of Columbia" ~"DC",
+      state_name == "Puerto Rico" ~"PR",
+      TRUE ~ state.abb[match(state_name, state.name)]
+    )
+  )|> filter(year %in% c(2020, 2021)) |>
+    arrange(state_name, population)
+pop_2021_new
+```
+
+#Getting population data for 2022-23
+
+```{r}
+# Import the new population data
+# https://www.census.gov/data/datasets/time-series/demo/popest/2020s-state-total.html 
+
+population_new_raw <- read.csv("./data/raw/NST-EST2023-ALLDATA.csv")
+
+# View the first few rows of the dataset
+head(population_new_raw)
+
+```
+
+```{r}
+#Wrangle the data
+
+population_2223_clean <- population_new_raw |>
+  filter(SUMLEV == 40) |>  # Keep only state-level data
+  select("NAME", "POPESTIMATE2022", "POPESTIMATE2023") |>  # Select relevant columns
+  rename(
+    state_name = NAME,       # Rename NAME to state_name
+    `2022` = POPESTIMATE2022, # Rename population columns for clarity
+    `2023` = POPESTIMATE2023
+  ) |>
+  pivot_longer(
+    cols = `2022`:`2023`,  # Convert population columns to long format
+    names_to = "year",
+    values_to = "population"
+  ) |>
+  mutate(
+    year = as.numeric(year), # Ensure year is numeric
+    population = as.numeric(population) # Ensure population is numeric
+  )
+
+# Print cleaned dataset
+print(population_2223_clean)
+
+```
+
+```{r}
+
+full_population <- bind_rows(pop_2021_new, population_2223_clean) |>
+  arrange(state_name, year)|>
+  mutate(
+    state = case_when(
+      state_name == "District of Columbia" ~ "DC",
+      state_name == "Puerto Rico" ~ "PR",
+      is.na(state) ~ state.abb[match(state_name, state.name)],
+      TRUE ~ state
+    )
+  )
+
+# Print the combined dataset
+print(full_population)
+
+```
+
+#Download covid case data
+
+```{r}
+api <- "https://data.cdc.gov/resource/pwn4-m3yp.json"
+response <- request(api) |>
+  req_url_query(`$limit` = 10000000000) |>  
+  req_perform() 
+
+cases_raw <- response |>
+  resp_body_json()|>
+  map_df(~ as_tibble(.))
+```
+
+```{r}
+# wrangle covid case data
+cases_clean <- cases_raw |>
+  select(state, end_date, new_cases) |>
+  rename(date = end_date, cases = new_cases) |>
+  mutate(
+    cases = as.numeric(cases),
+    date = as_date(ymd_hms(date))
+  ) |>
+  mutate(mmwr_week = epiweek(date), mmwr_year = epiyear(date)) |>
+select(state, mmwr_year, mmwr_week, cases) |>
+arrange(state, mmwr_year, mmwr_week)
+
+head(cases_clean)
+
+```
+
+# Get covid death and hospitalisation data
+
+```{r}
+get_cdc_data <- function(api){
+  request(api) |>
+  req_url_query("$limit" = 10000000) |>
+  req_perform() |>
+  resp_body_json(simplifyVector = TRUE)
+}
+
+hosp_raw <- get_cdc_data("https://data.cdc.gov/resource/39z2-9zu6.json")
+deaths_raw <- get_cdc_data("https://data.cdc.gov/resource/r8kw-7aab.json")
+vax_raw <- get_cdc_data("https://data.cdc.gov/resource/rh2h-3yt2.json")
+```
+
+# Wrangle the above data
+
+```{r}
+# Death
+deaths <- deaths_raw |>
+  filter(state %in% full_population$state_name) |>
+  mutate(end_date = as_date(end_date),mmwr_year = epiyear(end_date)) |>
+  rename(deaths_prov = covid_19_deaths,flu = influenza_deaths) |>
+  mutate(mmwr_week = parse_number(mmwr_week),deaths = parse_number(deaths_prov)) |>
+  filter(mmwr_year %in% c("2020", "2021","2022","2023", "2024"))|>
+  select(state, mmwr_week, mmwr_year, deaths)
+
+head(deaths)
+```
+
+```{r}
+# hospitalisation 
+hosp <- hosp_raw |>
+filter(jurisdiction %in% full_population$state) |>
+rename(hosp = new_covid_19_hospital, state = jurisdiction) |>
+mutate(hosp = parse_number(hosp),
+date = as_date(ymd_hms(collection_date)),
+mmwr_week = epiweek(date), mmwr_year = epiyear(date)) |>
+select(state, mmwr_year, mmwr_week, hosp) |>
+group_by(state, mmwr_year, mmwr_week) |>
+summarize(hosp = sum(hosp), n = n(), .groups = "drop") |>
+filter(n == 7) |>
+select(-n) |>
+arrange(mmwr_year, mmwr_week)
+
+head(hosp)
+```
+
+```{r}
+# vaccination 
+vax <- vax_raw |> filter(date_type == "Admin" & location %in% full_population$state) |>
+rename(state = location, series_complete = series_complete_cumulative,
+booster = booster_cumulative) |>
+mutate(date = as_date(ymd_hms(date)),
+mmwr_week = as.numeric(mmwr_week), mmwr_year = epiyear(date),
+series_complete = parse_number(series_complete),
+booster = parse_number(booster)) |>
+select(state, date, mmwr_week, mmwr_year, series_complete, booster) |>
+group_by(state, mmwr_week, mmwr_year) |>
+summarize(series_complete = max(series_complete),
+booster = max(booster),.groups = "drop") |>
+arrange(state, mmwr_year, mmwr_week)
+
+head(vax)
+
+```
+
+# Make dates data frame
+
+```{r}
+all_dates <- data.frame(date = seq(make_date(2020, 1, 25),
+make_date(2024, 12, 31),
+by = "week")) |>
+mutate(date = ceiling_date(date, unit = "week", week_start = 7) - days(1))|>
+mutate(mmwr_year = epiyear(date), mmwr_week = epiweek(date))
+dates_and_pop <- cross_join(all_dates, data.frame(state =
+unique(full_population$state))) |> left_join(full_population, by = c("state",
+"mmwr_year" = "year"))
+
+all_dates
+```
+
+# Combine the above data frame
+
+```{r}
+# get deaths dataset a state column
+# Create a state mapping table
+state_mapping <- tibble(
+  state_name = state.name,
+  state_abbr = state.abb
+)
+
+# Add entries for DC and Puerto Rico if not present
+state_mapping <- state_mapping |> 
+  add_row(state_name = "District of Columbia", state_abbr = "DC") |> 
+  add_row(state_name = "Puerto Rico", state_abbr = "PR")
+
+# Add state abbreviations to deaths dataset
+deaths <- deaths |> 
+  left_join(state_mapping, by = c("state" = "state_name"))
+
+```
+
+```{r}
+# Use the updated deaths dataset with state abbreviations for joining
+dat <- cases_clean |> 
+  left_join(deaths, by = c("state"= "state_abbr", "mmwr_year", "mmwr_week")) |> 
+  left_join(dates_and_pop, by = c("state", "mmwr_year", "mmwr_week")) |> 
+  left_join(hosp, by = c("state", "mmwr_year", "mmwr_week")) |> 
+  left_join(vax, by = c("state", "mmwr_year", "mmwr_week"))
+
+head(dat)
+
+```
+
+## Q1 - Divide the pandemic period, January 2020 to December 2024 into waves. Justify your choice with data visualization.
+
+```{r}
+# Calculate rates and reshape the dataset
+p <- dat |> 
+  mutate(
+    cases = cases / population * 100000,      # Calculate cases per 100,000
+    hosp = hosp / population * 100000,        # Calculate hospitalizations per 100,000
+    deaths = deaths / population * 100000     # Calculate deaths per 100,000
+  ) |> 
+  select(date, cases, hosp, deaths, state) |>  # Select relevant columns
+  pivot_longer(
+    cols = c(cases, deaths, hosp),            # Reshape the data
+    names_to = "outcome", 
+    values_to = "rate"
+  ) |> 
+  ggplot(aes(x = date, y = rate, color = state, group = state)) + 
+  geom_line() + # Add line plot
+  facet_wrap(~outcome, nrow = 3, scales = "free_y") + 
+  labs(
+    title = "COVID-19 Cases, Deaths, and Hospitalizations Over Time",
+    x = "Date",
+    y = "Rate per 100,000",
+    color = "State"
+  ) +
+  theme_minimal()
+
+# Print the plot
+print(p)
+
+```
+
+# Segmentation of covid waves
+
+```{r}
+dat_wave <- dat |> 
+  mutate(
+    wave = case_when(
+      # wave 1 is the initial outbreak globally 
+      date >= as.Date("2020-01-01") & date < as.Date("2020-10-01") ~ "Wave 1",
+      # wave 2 is the surge in fall and winter, where indoor gathering and holiday-related travel increased the cases; as well as the emergence of new variants like Alpha before vaccination became widely available.
+      date >= as.Date("2020-10-02") & date < as.Date("2021-06-30") ~ "Wave 2",
+      # wave 3 is when the contagious Delta variant began to circulate and eventually became dominant, hence significantly increased all metrics.
+      date >= as.Date("2021-07-01") & date < as.Date("2021-11-30") ~ "Wave 3",
+      # wave 4 is when Omicron BA.1 variant significantly increased cases number as it is highly transmissible but less severe; also due to the widespread vaccination.
+      date >= as.Date("2021-12-01") & date < as.Date("2022-05-01") ~ "Wave 4",
+      # wave 5 captures small wave associated with Omicron subvariants like BA.2, BA.5; less severe but more transmissible than Delta, also led to significant increases in hospitalisations and deaths.there are reduced activities across all metrics, potentially due to improved population immunity and pubic health measures. The peak highlights the virus’s ability to adapt and circulate under relaxed public health measures.
+      date >= as.Date("2022-05-02")  ~ "Wave 5",
+      TRUE ~ "Unknown"
+    )
+  )
+```
+
+```{r}
+p_wave <- dat_wave |> 
+  mutate(
+    cases = cases / population * 100000,
+    hosp = hosp / population * 100000,
+    deaths = deaths / population * 100000
+  ) |> 
+  select(date, cases, hosp, deaths, state, wave) |> 
+  pivot_longer(
+    cols = c(cases, deaths, hosp), 
+    names_to = "outcome", 
+    values_to = "rate"
+  ) |> 
+  ggplot(aes(x = date, y = rate, color = wave, group = state)) + 
+  geom_line() + 
+  facet_wrap(~outcome, nrow = 3, scales = "free_y") +
+  labs(
+    title = "COVID-19 Waves by Outcome",
+    x = "Date",
+    y = "Rate per 100,000",
+    color = "Wave"
+  ) +
+  theme_minimal()+
+  theme(
+    legend.position = "bottom",
+    legend.text = element_text(size = 8)
+  )
+
+print(p_wave)
+
+```
+
+## Question 2 - For each period compute the deaths rates by state. Describe which states did better or worse during the different periods.
+
+```{r}
+# Summarise total deaths and calculate death rates
+death_rates_by_wave <- dat_wave |>
+  group_by(state, wave) |>
+  filter(wave != "Unknown")|>
+  summarize(
+    total_deaths = sum(deaths, na.rm = TRUE),
+    total_population = mean(population, na.rm = TRUE)
+  ) |>
+  mutate(death_rate = (total_deaths / total_population) * 100000) |>
+  arrange(wave, desc(death_rate))
+
+print(death_rates_by_wave)
+
+```
+
+```{r}
+library(RColorBrewer)
+
+# Visualise death rates across states and waves
+ggplot(death_rates_by_wave, aes(x = wave, y = state, fill = death_rate)) +
+  geom_tile(color = "white") +
+  scale_fill_gradientn(    colors = brewer.pal(n = 9, name = "YlGnBu"), # Using a distinct Brewer palette
+name = "Death Rate\n(per 100,000)") +
+  labs(title = "Death Rates by State and Wave",
+       x = "Wave",
+       y = "State") +
+  theme_minimal()+
+  theme(
+    axis.text.y = element_text(size = 6), # Adjust the font size for y-axis
+    axis.text.x = element_text(size = 10), # Adjust font size for x-axis
+    axis.title = element_text(size = 12) # Adjust font size for titles
+  )
+```
+
+## Question 3 - Describe if COVID-19 became less or more virulent across the different periods.
+
+```{r}
+# 1. Case-Fatality Ratio (CFR) Over Time by Wave
+# Step 1: Create a new dataset for Q3.1
+dat_wave_q31 <- dat_wave |>
+  # Filter out rows where cases <= 10 to avoid division by very small numbers
+  filter(cases > 10) |>
+  filter(wave != "Unknown")|>
+  # Correct CFR calculation to avoid dividing by zero
+  mutate(CFR = ifelse(cases > 0, (deaths / cases) * 100, NA)) 
+
+# Step 2: Smooth the plot or limit the y-axis range to remove artifacts
+p_cfr <- ggplot(dat_wave_q31, aes(x = date, y = CFR, color = wave, group = wave)) +
+  geom_line(alpha = 0.6) + # Add transparency for better clarity
+  scale_y_continuous(limits = c(0, 10)) + # Limit y-axis to a realistic range
+  labs(title = "Case-Fatality Ratio (CFR) Over Time by Wave",
+       y = "CFR (%)",
+       x = "Date") +
+  theme_minimal() +
+  theme(legend.position = "right")
+
+# Print the plot
+print(p_cfr)
+```
+
+```{r}
+# 2. Hospitalization-to-Death Ratio Over Time
+# Step 1: Create a new dataset with HDR
+dat_wave_hdr <- dat_wave |>
+  filter(wave != "Unknown")|>
+  mutate(HDR = ifelse(deaths > 0, hosp / deaths, NA)) |> # Calculate HDR
+  group_by(date, wave) |>
+  summarise(
+    avg_HDR = mean(HDR, na.rm = TRUE),
+    min_HDR = min(HDR, na.rm = TRUE),
+    max_HDR = max(HDR, na.rm = TRUE)
+  )
+
+# Step 2: Generate the HDR plot over time
+p_hdr <- ggplot(dat_wave_hdr, aes(x = date, y = avg_HDR, color = wave, group = wave)) +
+  geom_line(size = 1) + # Add lines for each wave
+  geom_ribbon(aes(ymin = min_HDR, ymax = max_HDR, fill = wave), alpha = 0.2, show.legend = FALSE) + # Add shaded area for range
+  scale_y_continuous(trans = "log10", labels = scales::comma) + # Log scale for HDR
+  labs(
+    title = "Hospitalisation-to-Death Ratio (HDR) Over Time by Wave",
+    x = "Date",
+    y = "HDR (log scale)"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+  )
+
+# Print the plot
+print(p_hdr)
+
+```
+
+```{r}
+# 3. State-Level Comparison Heatmap
+# Step 1: Create a dataset for the heatmap
+state_wave_hdr <- dat_wave |>
+  filter(wave != "Unknown")|>
+  mutate(HDR = ifelse(deaths > 0, hosp / deaths, NA)) |> # Calculate HDR
+  group_by(state, wave) |>
+  summarise(avg_HDR = mean(HDR, na.rm = TRUE)) |> # Average HDR per state per wave
+  ungroup()
+
+# Step 2: Plot the heatmap
+p_heatmap_hdr <- ggplot(state_wave_hdr, aes(x = wave, y = reorder(state, avg_HDR, FUN = median), fill = avg_HDR)) +
+  geom_tile(color = "white", size = 0.2) + # Heatmap tiles with borders
+  scale_fill_viridis_c(option = "C", name = "HDR (log scale)", trans = "log10", na.value = "grey80") + # Log scale for HDR
+  labs(
+    title = "State-Level Comparison of Hospitalisation-to-Death Ratio (HDR) by Wave",
+    x = "Wave",
+    y = "State"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "right", 
+    axis.text.y = element_text(size = 6) # Adjust the font size for y-axis
+  )
+
+print(p_heatmap_hdr)
+
+```
+
+```{r}
+# 4. Death Rates vs. Vaccination Coverage
+# Step 1: Create a dataset for the scatter plot
+death_vax <- dat_wave |>
+  group_by(state, wave) |>
+  filter(wave != "Unknown")|>
+  summarise(
+    death_rate = sum(deaths, na.rm = TRUE) / sum(population, na.rm = TRUE) * 100000, # Death rate per 100,000
+    vax_rate = max(series_complete, na.rm = TRUE) / max(population, na.rm = TRUE) * 100 # Vaccination rate (percentage)
+  ) |>
+  ungroup()
+
+# Step 2: Plot the scatter plot
+p_death_vax <- ggplot(death_vax, aes(x = vax_rate, y = death_rate, color = wave, label = state)) +
+  geom_point(size = 3, alpha = 0.8) + # Add points
+  geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed") + # Add a linear regression line
+  scale_color_viridis_d(name = "Wave") + # Discrete color scale for waves
+  labs(
+    title = "Death Rates vs. Vaccination Coverage by Wave",
+    x = "Vaccination Coverage (%)",
+    y = "Death Rate (per 100,000)"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    axis.text = element_text(size = 10),
+    axis.title = element_text(size = 12)
+  )
+
+# Add labels to points (optional, can be removed for cleaner plot)
+p_death_vax <- p_death_vax +
+  geom_text(size = 3, vjust = -1, hjust = 1, check_overlap = TRUE)
+
+# Print the plot
+print(p_death_vax)
+
+```
+
+```{r}
+# 5. Rolling Averages of Deaths, Cases, and Hospitalisations
+# Step 1: Compute rolling averages
+dat_wave_roll <- dat_wave |>
+  group_by(state) |>
+  filter(wave != "Unknown")|>
+  mutate(
+    cases_avg = zoo::rollmean(cases, k = 7, fill = NA, align = "right"), # 7-day rolling average for cases
+    deaths_avg = zoo::rollmean(deaths, k = 7, fill = NA, align = "right"), # 7-day rolling average for deaths
+    hosp_avg = zoo::rollmean(hosp, k = 7, fill = NA, align = "right") # 7-day rolling average for hospitalizations
+  ) |>
+  ungroup()
+
+# Step 2: Prepare dataset for visualization
+dat_roll_long <- dat_wave_roll |>
+  select(date, wave, cases_avg, deaths_avg, hosp_avg) |>
+  pivot_longer(
+    cols = c(cases_avg, deaths_avg, hosp_avg),
+    names_to = "metric",
+    values_to = "rolling_avg"
+  )
+
+# Step 3: Plot rolling averages
+p_roll <- ggplot(dat_roll_long, aes(x = date, y = rolling_avg, color = wave)) +
+  geom_line(alpha = 0.7) +
+  facet_wrap(~ metric, scales = "free_y", nrow = 3, labeller = as_labeller(c(
+    cases_avg = "Cases (7-day Avg)",
+    deaths_avg = "Deaths (7-day Avg)",
+    hosp_avg = "Hospitalisations (7-day Avg)"
+  ))) +
+  scale_color_viridis_d(name = "Wave") +
+  labs(
+    title = "Rolling Averages of Cases, Deaths, and Hospitalisations",
+    x = "Date",
+    y = "7-day Average"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    axis.text = element_text(size = 10),
+    axis.title = element_text(size = 12),
+    strip.text = element_text(size = 12)
+  )
+print(p_roll)
+
+```
