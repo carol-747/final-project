@@ -94,7 +94,7 @@ All data sources were integrated and matched by state, week, and year to create 
 
 -   Scatter plots examined relationships between vaccination coverage and death rates.
 
--   Rolling averages over 7 weeks were computed from the weekly data to smooth fluctuations in cases, deaths, and hospitalisations over time.
+-   7-day averages (weekly totals divided by 7) were computed for cases, deaths, and hospitalisations.
 
 ## **Assumptions and Limitations**
 
@@ -124,7 +124,7 @@ The COVID-19 pandemic was segmented into five distinct waves, each characterised
 
 -   **Wave 3** (Jul 2021–Nov 2021), a distinct resurgence in all metrics driven by the Delta variant, exhibited the highest hospitalisation rates but lower case fatality compared to Wave 1.
 
--   **Wave 4** (Dec 2021–Apr 2022) showed a spike in cases due to the Omicron BA.1variant, which was highly transmissible but less severe, hence death and hospitalisation rates were relatively lower, reflecting reduced virulence and higher vaccination coverage. *Supplementary Figure 4* highlights the 7-week rolling averages, smoothing out fluctuations to show the clear peak in cases during Wave 4 with lower corresponding severe outcomes.
+-   **Wave 4** (Dec 2021–Apr 2022) showed a spike in cases due to the Omicron BA.1variant, which was highly transmissible but less severe, hence death and hospitalisation rates were relatively lower, reflecting reduced virulence and higher vaccination coverage. *Supplementary Figure 4* highlights the 7-day averages, showing the clear peak in cases during Wave 4 with lower corresponding severe outcomes.
 
 -   **Wave 5** (May 2022 to May 2023) represented smaller peaks associated with Omicron subvariants such as BA.2 and BA.5, demonstrating improved public immunity and milder disease progression.
 
@@ -154,7 +154,7 @@ Some states consistently had lower death rates across waves, such as Northeaster
 
 ## **Evolution of COVID-19 Virulence and Impact of Vaccination**
 
-COVID-19 virulence, measured through CFR, showed a clear decline across waves (Figure 3). During **Wave 1**, the CFR was highest due to limited treatment options and overwhelmed healthcare systems. *Supplementary Figure 1* provides detailed trends for all states, showing how specific regions experienced sustained higher rates of deaths and hospitalisations during Wave 3. By **Wave 5**, the CFR dropped significantly, reflecting the combined effects of vaccination, improved healthcare capacity, and the emergence of less severe variants. Additionally, states with higher vaccination coverage had lower death rates across all waves (Figure 4), consistent with vaccines reducing disease severity, although this state-level comparison does not adjust for confounders such as age structure or healthcare capacity. *Supplementary Figure 4* further provided evidence for vaccination’s role by presenting rolling averages of deaths and cases, smoothing temporal trends to emphasise how vaccination coverage influenced outcomes during each wave.
+COVID-19 virulence, measured through CFR, showed a clear decline across waves (Figure 3). During **Wave 1**, the CFR was highest due to limited treatment options and overwhelmed healthcare systems. *Supplementary Figure 1* provides detailed trends for all states, showing how specific regions experienced sustained higher rates of deaths and hospitalisations during Wave 3. By **Wave 5**, the CFR dropped significantly, reflecting the combined effects of vaccination, improved healthcare capacity, and the emergence of less severe variants. Additionally, states with higher vaccination coverage had lower death rates across all waves (Figure 4), consistent with vaccines reducing disease severity, although this state-level comparison does not adjust for confounders such as age structure or healthcare capacity. *Supplementary Figure 4* further provided evidence for vaccination’s role by presenting 7-day averages of deaths and cases to emphasise how vaccination coverage influenced outcomes during each wave.
 
 ![](images/q31.png){fig-align="center"}
 

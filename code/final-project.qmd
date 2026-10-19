@@ -517,15 +517,15 @@ print(p_death_vax)
 ```
 
 ```{r}
-# 5. Rolling Averages of Deaths, Cases, and Hospitalisations
-# Step 1: Compute rolling averages
+# 5. 7-Day Averages of Deaths, Cases, and Hospitalisations
+# Step 1: Compute 7-day averages (data are weekly totals, so weekly total / 7 = 7-day average)
 dat_wave_roll <- dat_wave |>
   group_by(state) |>
   filter(wave != "Unknown")|>
   mutate(
-    cases_avg = zoo::rollmean(cases, k = 7, fill = NA, align = "right"), # 7-week rolling average for cases (data are weekly)
-    deaths_avg = zoo::rollmean(deaths, k = 7, fill = NA, align = "right"), # 7-week rolling average for deaths
-    hosp_avg = zoo::rollmean(hosp, k = 7, fill = NA, align = "right") # 7-week rolling average for hospitalizations
+    cases_avg = cases / 7,   # 7-day average for cases
+    deaths_avg = deaths / 7, # 7-day average for deaths
+    hosp_avg = hosp / 7      # 7-day average for hospitalisations
   ) |>
   ungroup()
 
@@ -538,19 +538,19 @@ dat_roll_long <- dat_wave_roll |>
     values_to = "rolling_avg"
   )
 
-# Step 3: Plot rolling averages
+# Step 3: Plot 7-day averages
 p_roll <- ggplot(dat_roll_long, aes(x = date, y = rolling_avg, color = wave)) +
   geom_line(alpha = 0.7) +
   facet_wrap(~ metric, scales = "free_y", nrow = 3, labeller = as_labeller(c(
-    cases_avg = "Cases (7-week Avg)",
-    deaths_avg = "Deaths (7-week Avg)",
-    hosp_avg = "Hospitalisations (7-week Avg)"
+    cases_avg = "Cases (7-day Avg)",
+    deaths_avg = "Deaths (7-day Avg)",
+    hosp_avg = "Hospitalisations (7-day Avg)"
   ))) +
   scale_color_viridis_d(name = "Wave") +
   labs(
-    title = "Rolling Averages of Cases, Deaths, and Hospitalisations",
+    title = "7-Day Averages of Cases, Deaths, and Hospitalisations",
     x = "Date",
-    y = "7-week Average"
+    y = "7-day Average"
   ) +
   theme_minimal() +
   theme(
