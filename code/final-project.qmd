@@ -12,7 +12,9 @@ library(stringr)
 library(dplyr)
 library(httr2)
 
-census_key <- "2abeb09fab2a060893dafc5545972f25d26b0fb3"
+# Census API key is read from the environment (set CENSUS_API_KEY in ~/.Renviron)
+census_key <- Sys.getenv("CENSUS_API_KEY")
+if (census_key == "") stop("Set CENSUS_API_KEY; a free key is available at https://api.census.gov/data/key_signup.html")
 url <- "https://api.census.gov/data/2021/pep/population"
 
 request <- request(url) |>
@@ -69,7 +71,7 @@ pop_2021_new
 # Import the new population data
 # https://www.census.gov/data/datasets/time-series/demo/popest/2020s-state-total.html 
 
-population_new_raw <- read.csv("./data/raw/NST-EST2023-ALLDATA.csv")
+population_new_raw <- read.csv("../data/raw/NST-EST2023-ALLDATA.csv")
 
 # View the first few rows of the dataset
 head(population_new_raw)
