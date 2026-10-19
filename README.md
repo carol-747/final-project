@@ -29,7 +29,7 @@ Sources were merged by state and MMWR week/year, and counts were converted to ra
 
 - Segmented the pandemic into five waves from national weekly case, hospitalisation and death rates.
 - Compared state death rates within each wave (heatmap).
-- Tracked the case-fatality ratio (CFR) and hospitalisation-to-death ratio (HDR) by wave, with rolling averages to smooth week-to-week noise.
+- Tracked the case-fatality ratio (CFR) and hospitalisation-to-death ratio (HDR) by wave, with 7-week rolling averages to smooth week-to-week noise.
 - Plotted state vaccination coverage against death rates for each wave.
 
 ## Key findings
